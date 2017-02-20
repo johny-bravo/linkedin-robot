@@ -974,11 +974,11 @@ def worker(comp_list, creds):
             with open(err_log, 'a') as outfile:
                 outfile.write('%s,%s\n' % (comp_id, e))
                 # relaunch robot
-                time.sleep(30)
-                my_robot.quit()
-                my_robot = LinkedinRobot(credentials=creds, socks_port=w_port)
-                my_robot.sleep = 5
-                my_robot.log_in()
+            time.sleep(30)
+            my_robot.quit()
+            my_robot = LinkedinRobot(credentials=creds, socks_port=w_port)
+            my_robot.sleep = 5
+            my_robot.log_in()
 
         except NoSuchElementException, e:
             with open(err_log, 'a') as outfile:
@@ -1074,6 +1074,9 @@ def run():
         print 'started worker: %s' % worker_num
         time.sleep(random.randint(55, 65))
 
+    for worker_num, worker_proc in enumerate(proc_list):
+        worker_proc.join()
+        print 'joined worker: %s' % worker_num
 
 if __name__ == '__main__':
     run()

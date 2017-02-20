@@ -986,17 +986,23 @@ def worker(comp_list, creds):
 
             err_ban = 'LinkedIn is Momentarily Unavailable'
             err_conn = 'The proxy server is refusing connections'
+            err_look = 'artdeco'
 
             if err_ban in my_robot.driver.page_source:
                 print 'worker: %s is banned, going to sleep for 5 hours'
                 comp_list.insert(0, comp_id)
                 time.sleep(60 * 60 * 5)
                 continue
-
             elif err_conn in my_robot.driver.page_source:
                 print 'worker: %s failed to connect, quitting'
                 my_robot.quit()
                 return
+            elif err_look in my_robot.driver.page_source:
+                print 'worker: %s was reset to new look, quitting'
+                my_robot.quit()
+                return
+            else:
+                pass
 
         except Exception, e:
             # all these exceptions are potentially critical

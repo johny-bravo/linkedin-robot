@@ -921,7 +921,7 @@ def worker(comp_list, creds):
     my_robot.log_in()
 
     for iteration in range(len(comp_list)):
-        if err_count >= 25:
+        if err_count >= 1000:
             print '--------------------------------------'
             print 'worker: %s MAX ERR COUNT (%s) REACHED. breaking.' % (
                 err_count, w_name)
@@ -981,12 +981,6 @@ def worker(comp_list, creds):
             my_robot.log_in()
 
         except NoSuchElementException, e:
-            with open(err_log, 'a') as outfile:
-                trace = traceback.format_exc()
-                url = my_robot.driver.current_url
-                outfile.write(
-                    'comp_id: %s, error: %s\n url: %s\n' % (comp_id, e, url))
-                outfile.write(trace)
 
             err_ban = 'LinkedIn is Momentarily Unavailable'
             err_conn = 'The proxy server is refusing connections'
@@ -1006,7 +1000,14 @@ def worker(comp_list, creds):
                 my_robot.quit()
                 return
             else:
-                pass
+                err_count += 1
+
+            with open(err_log, 'a') as outfile:
+                trace = traceback.format_exc()
+                url = my_robot.driver.current_url
+                outfile.write(
+                    'comp_id: %s, error: %s\n url: %s\n' % (comp_id, e, url))
+                outfile.write(trace)
 
         except Exception, e:
             # all these exceptions are potentially critical

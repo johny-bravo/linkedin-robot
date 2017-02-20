@@ -265,8 +265,8 @@ class LinkedinRobot(object):
         self.logout()
         time.sleep(self.sleep)
         self.driver.quit()
-        # plugin-container crash fix
-        time.sleep(1)
+        # plugin-container will crash and win will throw err from werfault.exe
+        # no better fix at the moment
         os.system('taskkill /F /IM werfault.exe')
 
     def log_in(self):
@@ -311,6 +311,12 @@ class LinkedinRobot(object):
         4. return all found emloyee urls for company
         """
 
+        emplist_id = 'emplist:' + company_url
+        # first check in cache
+        if self.r.exists(emplist_id):
+            all_employee_urls = json.loads(self.r.get(emplist_id))
+            return all_employee_urls
+
         company_id = company_url.split('/')[-1]
         see_all_url = 'https://www.linkedin.com/vsearch/p?f_CC=%s' % company_id
         self.get_if_not_current(see_all_url)
@@ -347,6 +353,10 @@ class LinkedinRobot(object):
         assert empl_found == empl_total, \
             'bad employee count: found: %s total: %s' % (empl_found, empl_total)
 
+        # save to cache
+        self.r.set(emplist_id, json.dumps(all_employee_urls))
+        self.r.save()
+
         return all_employee_urls
 
     def get_employee_urls_per_page(self, url):
@@ -370,7 +380,6 @@ class LinkedinRobot(object):
         return employee_url_list
 
     def get_employee_full_name(self, employee_page_url, geturl=True):
-        # todo: if geturl is true, search in cache first
         if geturl:
             self.get_if_not_current(employee_page_url)
         el = self.driver.find_element_by_css_selector(
@@ -414,11 +423,10 @@ class LinkedinRobot(object):
             title = self.driver.find_element_by_css_selector(
                 '#headline > p.title')
         except NoSuchElementException, e:
-            print 'FAILED TO LOCATE TITLE. url: %s' % self.driver.current_url
+            print 'worker %s failed to get title, url: %s' % (
+                self.login, self.driver.current_url)
             print e
-            # -- is used by linkedin if no title
-            # todo return actual element's content and not hardcoded string
-            return '--'
+            return ''
 
         return title.text
 
@@ -428,7 +436,7 @@ class LinkedinRobot(object):
             self.get_if_not_current(employee_page_url)
 
         loc = self.driver.find_element_by_css_selector(
-            '#location.editable-item > dl')
+            '#location > dl')
         elems_in_loc = loc.find_elements_by_css_selector('*')
         geo = self.driver.find_element_by_css_selector(
             '#location > dl > dd > span.locality > a').text
@@ -476,7 +484,8 @@ class LinkedinRobot(object):
                 'ul.browse-map-list > li')
         except NoSuchElementException, e:
             # todo refactor to AlvListException, del prints
-            print 'FAILED TO FIND ALV LIST. url: %s' % self.driver.current_url
+            print 'worker %s failed to find alv_list. url: %s' % (
+                self.login, self.driver.current_url)
             print e
             return []
 
@@ -619,6 +628,7 @@ class LinkedinRobot(object):
             assert len(empl_url) >= 1
             self.get_if_not_current(empl_url)
 
+        time.sleep(2)  # todo see if this fixes random 'NoSuchElementException'
         title = self.get_employee_title(empl_url, geturl=geturl)
         geo = self.get_employee_geo(empl_url, geturl=geturl)
         also_viewed_list = self.get_people_also_viewed(empl_url, geturl=geturl,
@@ -691,6 +701,9 @@ class LinkedinRobot(object):
         # weird behaviour example: https://www.linkedin.com/in/sabrinagra%C3%B1a
         # page returns Profile Not Found, should return profile page
         if 'Profile Not Found' is self.driver.page_source:
+            print 'worker: %s encountered weird bug ' \
+                  'Profile Not Found, url: %s' % (
+                      self.login, self.driver.current_url)
             return '', '', '', []
 
         if self.r.exists(search_id):
@@ -841,7 +854,9 @@ class LinkedinRobot(object):
         :param company_url:
         :return dict{url, geo, name, title}
         """
+
         found_employee_dict = {}
+
         company_emloyee_urls = self.get_employee_urls_per_company(company_url)
 
         urls_found = len(company_emloyee_urls)
@@ -856,8 +871,7 @@ class LinkedinRobot(object):
             self.dict_id += 1
 
         assert urls_found == self.dict_id
-        # todo cache results here - for companies with a lot of employees
-        # key is company_url
+
         return found_employee_dict
 
 
@@ -909,13 +923,14 @@ def worker(comp_list, creds):
     for iteration in range(len(comp_list)):
         if err_count >= 25:
             print '--------------------------------------'
-            print 'MAX ERROR COUNT REACHED. worker: %s' % w_name
+            print 'worker: %s MAX ERR COUNT (%s) REACHED. breaking.' % (
+                err_count, w_name)
             print '--------------------------------------'
             break
         try:
             comp_id = comp_list.pop()
         except IndexError, e:
-            msg = 'Comp list is empty'
+            msg = 'worker: %s Companies list is empty, breaking' % w_name
             with open(err_log, 'a') as outfile:
                 outfile.write('%s,%s\n' % (msg, e))
             break
@@ -923,6 +938,7 @@ def worker(comp_list, creds):
         sleep_dur = random.randint(30, 60)
 
         try:
+            print 'worker: %s going to scrape company %s' % (w_name, comp_id)
             target_company = 'https://www.linkedin.com/company/%s' % comp_id
             data_to_write = my_robot.scrape_all_per_company_url(target_company)
 
@@ -960,13 +976,35 @@ def worker(comp_list, creds):
                 my_robot.sleep = 5
                 my_robot.log_in()
 
+        except NoSuchElementException, e:
+            with open(err_log, 'a') as outfile:
+                trace = traceback.format_exc()
+                url = my_robot.driver.current_url
+                outfile.write(
+                    'comp_id: %s, error: %s,\n url: %s\n' % (comp_id, e, url))
+                outfile.write(trace)
+
+            err_ban = 'LinkedIn is Momentarily Unavailable'
+            err_conn = 'The proxy server is refusing connections'
+
+            if err_ban in my_robot.driver.page_source:
+                print 'worker: %s is banned, going to sleep for 5 hours'
+                comp_list.insert(0, comp_id)
+                time.sleep(60 * 60 * 5)
+                continue
+
+            elif err_conn in my_robot.driver.page_source:
+                print 'worker: %s failed to connect, quitting'
+                my_robot.quit()
+                return
+
         except Exception, e:
             # all these exceptions are potentially critical
             # print to console and write to log for later debug
             err_count += 1
 
             print '---------------------------------------------------'
-            print '%s encountered critifcal error: %s' % (w_name, e)
+            print '%s encountered critical error: %s' % (w_name, e)
             print '%s failed to scrape company %s, skipping' % (w_name, comp_id)
             print 'debug url: %s ' % my_robot.driver.current_url
             print '---------------------------------------------------'
@@ -1021,12 +1059,8 @@ def run():
 
     for worker_num, worker_proc in enumerate(proc_list):
         worker_proc.start()
-        print 'started worker %s' % worker_num
+        print 'started worker: %s' % worker_num
         time.sleep(random.randint(55, 65))
-
-    for worker_num, worker_proc in enumerate(proc_list):
-        worker_proc.join()
-        print 'joined worker %s' % worker_num
 
 
 if __name__ == '__main__':

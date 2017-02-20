@@ -483,7 +483,6 @@ class LinkedinRobot(object):
             people_also_viewed = self.driver.find_elements_by_css_selector(
                 'ul.browse-map-list > li')
         except NoSuchElementException, e:
-            # todo refactor to AlvListException, del prints
             print 'worker %s failed to find alv_list. url: %s' % (
                 self.login, self.driver.current_url)
             print e
@@ -981,10 +980,13 @@ def worker(comp_list, creds):
             my_robot.log_in()
 
         except NoSuchElementException, e:
+            # catch unexpected NoSuchElement exceptions
+            # known errors:
+            err_ban = 'LinkedIn is Momentarily Unavailable'  # bot is banned
+            err_conn = 'The proxy server is refusing connections'  # proxy fail
+            err_look = 'artdeco'  # account was reset to new style
 
-            err_ban = 'LinkedIn is Momentarily Unavailable'
-            err_conn = 'The proxy server is refusing connections'
-            err_look = 'artdeco'
+            trace = traceback.format_exc()
 
             if err_ban in my_robot.driver.page_source:
                 print 'worker: %s is banned, going to sleep for 5 hours'
@@ -992,18 +994,19 @@ def worker(comp_list, creds):
                 time.sleep(60 * 60 * 5)
                 continue
             elif err_conn in my_robot.driver.page_source:
-                print 'worker: %s failed to connect, quitting'
+                print 'worker: %s failed to connect, quitting' % w_name
                 my_robot.quit()
                 return
             elif err_look in my_robot.driver.page_source:
-                print 'worker: %s was reset to new look, quitting'
+                print 'worker: %s was reset to new look, quitting' % w_name
                 my_robot.quit()
                 return
             else:
+                print 'worker: %s unexpected NoSuchElement exception' % w_name
+                print trace
                 err_count += 1
 
             with open(err_log, 'a') as outfile:
-                trace = traceback.format_exc()
                 url = my_robot.driver.current_url
                 outfile.write(
                     'comp_id: %s, error: %s\n url: %s\n' % (comp_id, e, url))
@@ -1026,7 +1029,7 @@ def worker(comp_list, creds):
                 outfile.write(trace)
 
             # push company back to comp_list[0], can lead to bugs if neither bot
-            # can finish scraping, then after 25 fails each will stop
+            # can finish scraping, then after 1000 fails each will stop
             comp_list.insert(0, comp_id)
 
             print '%s going to sleep for %s sec after critical error' % (
@@ -1078,6 +1081,7 @@ def run():
     for worker_num, worker_proc in enumerate(proc_list):
         worker_proc.join()
         print 'joined worker: %s' % worker_num
+
 
 if __name__ == '__main__':
     run()

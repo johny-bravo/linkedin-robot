@@ -1,6 +1,6 @@
 * scrapes linkedin employees per company url, 
 including those out of your network, exploiting profile's
-`also viewed` list behaviour
+`also viewed` list leak
 
 * writes Name, Title, Location, URL to `.json`
 

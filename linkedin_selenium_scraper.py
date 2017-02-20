@@ -934,6 +934,10 @@ def worker(comp_list, creds):
             with open(err_log, 'a') as outfile:
                 outfile.write('%s,%s\n' % (msg, e))
             break
+        except IOError, e:
+            print 'worker: %s failed to pop from list. err: %s' % (w_name, e)
+            time.sleep(5)
+            comp_id = comp_list.pop()
 
         sleep_dur = random.randint(30, 60)
 
@@ -981,7 +985,7 @@ def worker(comp_list, creds):
                 trace = traceback.format_exc()
                 url = my_robot.driver.current_url
                 outfile.write(
-                    'comp_id: %s, error: %s,\n url: %s\n' % (comp_id, e, url))
+                    'comp_id: %s, error: %s\n url: %s\n' % (comp_id, e, url))
                 outfile.write(trace)
 
             err_ban = 'LinkedIn is Momentarily Unavailable'
@@ -1030,6 +1034,8 @@ def worker(comp_list, creds):
 
 
 def run():
+    # todo clean cache where title == '--' change to ''
+
     # make sure no old procs left running
     os.system('taskkill /F /IM plugin-container.exe')
     os.system('taskkill /F /IM firefox.exe')

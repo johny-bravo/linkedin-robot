@@ -989,7 +989,8 @@ def worker(comp_list, creds):
             trace = traceback.format_exc()
 
             if err_ban in my_robot.driver.page_source:
-                print 'worker: %s is banned, going to sleep for 5 hours'
+                print 'worker: %s is banned, ' \
+                      'going to sleep for 5 hours' % w_name
                 comp_list.insert(0, comp_id)
                 time.sleep(60 * 60 * 5)
                 continue
@@ -1002,8 +1003,9 @@ def worker(comp_list, creds):
                 my_robot.quit()
                 return
             else:
-                print 'worker: %s unexpected NoSuchElement exception' % w_name
-                print trace
+                print 'worker: %s unexpected NoSuchElement exception. ' \
+                      'url: %s' % (w_name, my_robot.driver.current_url)
+                print e
                 err_count += 1
 
             with open(err_log, 'a') as outfile:
@@ -1038,7 +1040,7 @@ def worker(comp_list, creds):
 
 
 def run():
-    # todo clean cache where title == '--' change to ''
+    # todo increase wait time after ban
 
     # make sure no old procs left running
     os.system('taskkill /F /IM plugin-container.exe')

@@ -1040,8 +1040,6 @@ def worker(comp_list, creds):
 
 
 def run():
-    # todo increase wait time after ban
-
     # make sure no old procs left running
     os.system('taskkill /F /IM plugin-container.exe')
     os.system('taskkill /F /IM firefox.exe')
